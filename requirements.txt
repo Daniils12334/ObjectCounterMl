@@ -1,0 +1,11 @@
+torch
+torchvision
+transformers
+pillow
+opencv-python
+faiss-cpu
+scikit-learn
+fastapi
+uvicorn
+python-multipart
+

@@ -12,3 +12,6 @@
 4. Index Storage
    - Store embeddings in FAISS index
    - Store metadata (which image, bounding box coordinates)
+
+
+![First Try](/screenshots/Figure_1.png)

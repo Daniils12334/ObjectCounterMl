@@ -24,12 +24,12 @@ def create_color_test_images():
         cv2.putText(scene, color_name, (x, y+100), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
     
-    cv2.imwrite("color_test_scene.jpg", scene)
+    cv2.imwrite("scene2.jpg", scene)
     
     # Query - красный квадрат
     query = np.ones((90, 90, 3), dtype=np.uint8) * 240
     cv2.rectangle(query, (5, 5), (85, 85), (0, 0, 255), -1)  # Красный
-    cv2.imwrite("red_query.jpg", query)
+    cv2.imwrite("query2.jpg", query)
     
     print("✅ Created color test images")
 
@@ -45,11 +45,11 @@ def test_color_search():
     
     # Индексируем сцену
     print("📸 Indexing color test scene...")
-    engine.index_image("color_test_scene.jpg", "color_test")
+    engine.index_image("scene2.jpg", "color_test")
     
     # ТЕСТ 1: Обычный поиск (найдёт все квадраты)
     print("\n🔍 TEST 1: Normal search (finds all squares)...")
-    normal_results = engine.search("red_query.jpg", top_k=4, threshold=0.3)
+    normal_results = engine.search("query2.jpg", top_k=4, threshold=0.3)
     print(f"Normal search found {len(normal_results)} objects")
     
     # ТЕСТ 2: Поиск с фильтрацией по цвету
@@ -77,11 +77,11 @@ def test_color_search():
     # Визуализируем все результаты
     if normal_results:
         print("\n🖼️ Visualizing NORMAL search results...")
-        ImageUtils.visualize_search_results("red_query.jpg", normal_results)
+        ImageUtils.visualize_search_results("query2.jpg", normal_results)
     
     if color_results:
         print("\n🖼️ Visualizing COLOR-FILTERED results...")
-        ImageUtils.visualize_search_results("red_query.jpg", color_results)
+        ImageUtils.visualize_search_results("query2.jpg", color_results)
 
 if __name__ == "__main__":
     test_color_search()

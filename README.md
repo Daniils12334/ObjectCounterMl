@@ -13,5 +13,7 @@
    - Store embeddings in FAISS index
    - Store metadata (which image, bounding box coordinates)
 
-
+## visual_search_mvp (layout first try)
 ![First Try](/screenshots/Figure_1.png)
+
+## visual_search_mvp (layout second try, different method) -  **Failed**

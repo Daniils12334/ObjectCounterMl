@@ -1,109 +1,106 @@
+import cv2
 import numpy as np
-from typing import List, Tuple, Optional
-import faiss
-from sklearn.metrics.pairwise import cosine_similarity
+import torch
+from typing import List, Dict, Tuple
+import logging
 
-from .embedders import BaseEmbedder
-from .segmenters import BaseSegmenter
+from ..core.segmenters import Segmenter
+from ..core.embedders import Embedder
+from ..utils.visualization import draw_results
+
+logger = logging.getLogger(__name__)
 
 class VisualSearchEngine:
-    def __init__(
-        self,
-        embedder: BaseEmbedder,
-        segmenter: BaseSegmenter,
-        use_faiss: bool = True
-    ):
-        self.embedder = embedder
+    def __init__(self, segmenter: Segmenter, embedder: Embedder, similarity_threshold: float = 0.75):
         self.segmenter = segmenter
-        self.use_faiss = use_faiss
-        self.index = None
-        self.segment_metadata = []
+        self.embedder = embedder
+        self.similarity_threshold = similarity_threshold
         
-        if use_faiss:
-            dim = self.embedder.get_embedding_dim()
-            self.index = faiss.IndexFlatIP(dim)
+    def search_similar_objects(self, scene_image: np.ndarray, query_image: np.ndarray, 
+                             min_area: int = 1000, max_area: int = 50000) -> Dict:
+        """
+        Поиск объектов на сцене, похожих на query_image
+        
+        Args:
+            scene_image: изображение сцены (BGR)
+            query_image: эталонное изображение объекта (BGR)
+            min_area: минимальная площадь объекта
+            max_area: максимальная площадь объекта
+            
+        Returns:
+            Словарь с результатами поиска
+        """
+        try:
+            # 1. Сегментация объектов на сцене
+            logger.info("Сегментация объектов на сцене...")
+            scene_objects = self.segmenter.segment(scene_image)
+            
+            # 2. Фильтрация объектов по размеру
+            filtered_objects = []
+            for obj in scene_objects:
+                area = obj['bbox'][2] * obj['bbox'][3]  # width * height
+                if min_area <= area <= max_area:
+                    filtered_objects.append(obj)
+            
+            logger.info(f"Найдено {len(filtered_objects)} объектов после фильтрации")
+            
+            if not filtered_objects:
+                return {"matches": [], "query_embedding": None, "scene_objects": []}
+            
+            # 3. Получение эмбеддинга для эталонного изображения
+            logger.info("Получение эмбеддинга для эталонного изображения...")
+            query_embedding = self.embedder.embed_image(query_image)
+            
+            # 4. Поиск похожих объектов
+            logger.info("Поиск похожих объектов...")
+            matches = self._find_similar_objects(scene_image, filtered_objects, query_embedding)
+            
+            return {
+                "matches": matches,
+                "query_embedding": query_embedding,
+                "scene_objects": filtered_objects,
+                "total_objects": len(filtered_objects)
+            }
+            
+        except Exception as e:
+            logger.error(f"Ошибка при поиске объектов: {e}")
+            raise
     
-    def index_image(
-        self, 
-        image_path: str, 
-        image_id: Optional[str] = None
-    ) -> List[Tuple[int, int, int, int]]:
-        """Segment image and index all segments"""
-        import cv2
-        from PIL import Image
+    def _find_similar_objects(self, scene_image: np.ndarray, objects: List[Dict], 
+                            query_embedding: torch.Tensor) -> List[Dict]:
+        """Поиск объектов с похожими эмбеддингами"""
+        matches = []
         
-        # Load and segment image
-        image_cv = cv2.imread(image_path)
-        image_pil = Image.open(image_path)
-        segments = self.segmenter.segment(image_cv)
-        
-        embeddings = []
-        for i, (x, y, w, h) in enumerate(segments):
-            # Extract segment and get embedding
-            segment_img = image_pil.crop((x, y, x + w, y + h))
-            processed = self.embedder.preprocess(segment_img)
-            embedding = self.embedder.encode(processed)
+        for i, obj in enumerate(objects):
+            # Извлечение региона объекта
+            x, y, w, h = obj['bbox']
+            crop = scene_image[y:y+h, x:x+w]
             
-            embeddings.append(embedding)
+            if crop.size == 0:
+                continue
+                
+            # Получение эмбеддинга для объекта
+            obj_embedding = self.embedder.embed_image(crop)
             
-            # Store metadata
-            self.segment_metadata.append({
-                'image_id': image_id or image_path,
-                'segment_id': i,
-                'bbox': (x, y, w, h),
-                'image_path': image_path
-            })
+            # Вычисление косинусного сходства
+            similarity = self._cosine_similarity(query_embedding, obj_embedding)
+            
+            if similarity >= self.similarity_threshold:
+                match_info = {
+                    'object_id': i,
+                    'bbox': obj['bbox'],
+                    'similarity': similarity,
+                    'mask': obj.get('mask', None),
+                    'crop': crop
+                }
+                matches.append(match_info)
         
-        # Add to index
-        if self.use_faiss and self.index is not None:
-            embeddings_np = np.array(embeddings).astype('float32')
-            faiss.normalize_L2(embeddings_np)
-            self.index.add(embeddings_np)
-        
-        return segments
+        # Сортировка по убыванию сходства
+        matches.sort(key=lambda x: x['similarity'], reverse=True)
+        return matches
     
-    def search(
-        self,
-        query_image_path: str,
-        top_k: int = 10,
-        similarity_threshold: float = 0.7
-    ) -> List[Tuple[dict, float]]:
-        """Search for similar segments"""
-        from PIL import Image
-        
-        # Get query embedding
-        query_image = Image.open(query_image_path)
-        processed = self.embedder.preprocess(query_image)
-        query_embedding = self.embedder.encode(processed)
-        
-        if self.use_faiss and self.index is not None:
-            # FAISS search
-            query_embedding_np = query_embedding.reshape(1, -1).astype('float32')
-            faiss.normalize_L2(query_embedding_np)
-            
-            similarities, indices = self.index.search(query_embedding_np, top_k)
-            
-            results = []
-            for i, (idx, sim) in enumerate(zip(indices[0], similarities[0])):
-                if sim >= similarity_threshold:
-                    results.append((self.segment_metadata[idx], float(sim)))
-            
-            return results
-        else:
-            # Fallback to sklearn (for small datasets)
-            all_embeddings = np.array([self.get_embedding_by_idx(i) 
-                                     for i in range(len(self.segment_metadata))])
-            
-            similarities = cosine_similarity([query_embedding], all_embeddings)[0]
-            top_indices = np.argsort(similarities)[::-1][:top_k]
-            
-            return [
-                (self.segment_metadata[idx], float(similarities[idx]))
-                for idx in top_indices if similarities[idx] >= similarity_threshold
-            ]
-    
-    def get_embedding_by_idx(self, idx: int) -> np.ndarray:
-        """Get embedding by index (for non-FAISS mode)"""
-        # This would need to cache embeddings in non-FAISS mode
-        # Implementation depends on storage strategy
-        pass
+    def _cosine_similarity(self, a: torch.Tensor, b: torch.Tensor) -> float:
+        """Вычисление косинусного сходства между векторами"""
+        a_norm = a / a.norm(dim=-1, keepdim=True)
+        b_norm = b / b.norm(dim=-1, keepdim=True)
+        return (a_norm @ b_norm.T).item()

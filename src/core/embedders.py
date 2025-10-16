@@ -1,74 +1,57 @@
-from abc import ABC, abstractmethod
-from typing import Dict, List, Optional
 import torch
+import clip
 from PIL import Image
 import numpy as np
+import cv2
+import logging
 
-class BaseEmbedder(ABC):
-    """Abstract base class for all embedders"""
-    
-    @abstractmethod
-    def preprocess(self, image: Image.Image) -> torch.Tensor:
-        pass
-    
-    @abstractmethod
-    def encode(self, image_tensor: torch.Tensor) -> np.ndarray:
-        pass
-    
-    @abstractmethod
-    def get_embedding_dim(self) -> int:
-        pass
+logger = logging.getLogger(__name__)
 
-class CLIPEmbedder(BaseEmbedder):
-    def __init__(self, model_config: Dict):
-        import clip
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model, self.preprocess_fn = clip.load(
-            model_config["name"], 
-            device=self.device
-        )
-        self.embedding_dim = model_config["embedding_dim"]
-    
-    def preprocess(self, image: Image.Image) -> torch.Tensor:
-        return self.preprocess_fn(image).unsqueeze(0).to(self.device)
-    
-    def encode(self, image_tensor: torch.Tensor) -> np.ndarray:
-        with torch.no_grad():
-            features = self.model.encode_image(image_tensor)
-        return features.cpu().numpy().flatten()
-    
-    def get_embedding_dim(self) -> int:
-        return self.embedding_dim
-
-class DINOv2Embedder(BaseEmbedder):
-    def __init__(self, model_config: Dict):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = torch.hub.load(
-            'facebookresearch/dinov2', 
-            model_config["name"]
-        ).to(self.device)
-        self.model.eval()
-        self.embedding_dim = model_config["embedding_dim"]
+class Embedder:
+    def __init__(self, model_name: str = "ViT-B/32", device: str = "cuda"):
+        self.device = device if torch.cuda.is_available() else "cpu"
+        logger.info(f"Загрузка CLIP модели {model_name} на {self.device}...")
         
-        # Setup transforms
-        from torchvision import transforms
-        self.transform = transforms.Compose([
-            transforms.Resize(224),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize(
-                mean=model_config["preprocessing"]["mean"],
-                std=model_config["preprocessing"]["std"]
-            )
-        ])
+        try:
+            self.model, self.preprocess = clip.load(model_name, device=self.device)
+            logger.info(f"CLIP модель {model_name} загружена успешно")
+        except Exception as e:
+            logger.error(f"Ошибка загрузки CLIP модели: {e}")
+            raise
     
-    def preprocess(self, image: Image.Image) -> torch.Tensor:
-        return self.transform(image).unsqueeze(0).to(self.device)
-    
-    def encode(self, image_tensor: torch.Tensor) -> np.ndarray:
-        with torch.no_grad():
-            features = self.model(image_tensor)
-        return features.cpu().numpy().flatten()
-    
-    def get_embedding_dim(self) -> int:
-        return self.embedding_dim
+    def embed_image(self, image: np.ndarray) -> torch.Tensor:
+        """
+        Получение эмбеддинга для изображения
+        
+        Args:
+            image: входное изображение (BGR)
+            
+        Returns:
+            Тензор с эмбеддингом
+        """
+        try:
+            # Проверяем что изображение не пустое
+            if image.size == 0:
+                logger.warning("Пустое изображение для эмбеддинга")
+                return torch.zeros(512).to(self.device)
+                
+            # Конвертация BGR to RGB and to PIL
+            if len(image.shape) == 3 and image.shape[2] == 3:
+                image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            else:
+                image_rgb = image
+                
+            pil_image = Image.fromarray(image_rgb)
+            
+            # Предобработка
+            processed_image = self.preprocess(pil_image).unsqueeze(0).to(self.device)
+            
+            with torch.no_grad():
+                image_features = self.model.encode_image(processed_image)
+                
+            return image_features.squeeze()
+            
+        except Exception as e:
+            logger.error(f"Ошибка при получении эмбеддинга: {e}")
+            # Возвращаем нулевой вектор в случае ошибки
+            return torch.zeros(512).to(self.device)

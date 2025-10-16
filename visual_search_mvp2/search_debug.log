@@ -1,0 +1,16 @@
+2025-10-16 14:50:19,474 - src.core.object_counter_debug - INFO - Детальный анализ эталонного изображения...
+2025-10-16 14:50:19,477 - src.core.object_counter_debug - INFO - Анализ запроса сохранен в: detailed_debug_query.jpg
+2025-10-16 14:50:19,505 - src.core.color_analyzer_debug - INFO - Цветовое покрытие сцены: 0.00%
+2025-10-16 14:50:19,506 - src.core.object_counter_debug - INFO - Цветовое покрытие сцены: 0.00%
+2025-10-16 14:50:19,506 - src.core.object_counter_debug - WARNING - Очень низкое цветовое покрытие! Возможно, объекты такого цвета отсутствуют.
+2025-10-16 14:50:19,507 - src.core.simple_searcher - INFO - Найдено контуров по цвету: 0
+2025-10-16 14:50:19,507 - src.core.simple_searcher - INFO - После объединения: 0 объектов
+2025-10-16 14:50:19,507 - src.core.object_counter_debug - INFO - Итоговое количество объектов: 0
+2025-10-16 14:50:43,710 - src.core.object_counter_debug - INFO - Детальный анализ эталонного изображения...
+2025-10-16 14:50:43,711 - src.core.object_counter_debug - INFO - Анализ запроса сохранен в: simple_debug_query.jpg
+2025-10-16 14:50:43,721 - src.core.color_analyzer_debug - INFO - Цветовое покрытие сцены: 0.00%
+2025-10-16 14:50:43,722 - src.core.object_counter_debug - INFO - Цветовое покрытие сцены: 0.00%
+2025-10-16 14:50:43,722 - src.core.object_counter_debug - WARNING - Очень низкое цветовое покрытие! Возможно, объекты такого цвета отсутствуют.
+2025-10-16 14:50:43,723 - src.core.simple_searcher - INFO - Найдено контуров по цвету: 0
+2025-10-16 14:50:43,723 - src.core.simple_searcher - INFO - После объединения: 0 объектов
+2025-10-16 14:50:43,723 - src.core.object_counter_debug - INFO - Итоговое количество объектов: 0

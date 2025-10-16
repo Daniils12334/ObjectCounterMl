@@ -16,4 +16,6 @@
 ## visual_search_mvp (layout first try)
 ![First Try](/screenshots/Figure_1.png)
 
-## visual_search_mvp (layout second try, different method) -  **Failed**
+## visual_search_mvp2 (layout second try, different method) -  **Failed**
+
+![Second Try](visual_search_mvp2/debug_results.jpg)
